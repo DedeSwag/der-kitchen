@@ -1,0 +1,47 @@
+:root {
+  --color-primary: #2697ff;
+  --color-primary-light: #5cb3ff;
+  --color-primary-dark: #007cc4;
+  --color-success: #67C23A;
+  --color-warning: #E6A23C;
+  --color-danger: #F56C6C;
+  --color-info: #909399;
+
+  --sidebar-bg: #1a2942;
+  --sidebar-text: #E5E7EB;
+  --sidebar-active: #2697ff;
+  --header-height: 60px;
+  --sidebar-width: 220px;
+  --sidebar-collapsed-width: 64px;
+
+  --bg-page: #F5F7FA;
+  --bg-card: #FFFFFF;
+  --border-color: #E4E7ED;
+  --text-primary: #303133;
+  --text-regular: #606266;
+  --text-secondary: #909399;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body, #app {
+  width: 100%;
+  height: 100%;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+  font-size: 14px;
+  color: var(--text-primary);
+  background-color: var(--bg-page);
+}
+
+a {
+  text-decoration: none;
+  color: inherit;
+}
+
+ul, ol {
+  list-style: none;
+}

@@ -1,0 +1,93 @@
+server:
+  port: 8080
+
+spring:
+  profiles:
+    active: dev
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:der_kitchen}
+    username: ${DB_USERNAME:postgres}
+    password: ${DB_PASSWORD:postgres}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 5
+      connection-timeout: 30000
+  servlet:
+    multipart:
+      max-file-size: 5MB
+      max-request-size: 10MB
+  jackson:
+    date-format: yyyy-MM-dd HH:mm:ss
+    time-zone: Asia/Shanghai
+    default-property-inclusion: non_null
+
+# MyBatis-Plus
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+  global-config:
+    db-config:
+      id-type: auto
+      logic-delete-field: deleted
+      logic-delete-value: true
+      logic-not-delete-value: false
+  type-aliases-package: com.der.kitchen.*.entity
+
+# MinIO
+minio:
+  endpoint: ${MINIO_ENDPOINT:http://localhost:9000}
+  access-key: ${MINIO_ACCESS_KEY:minioadmin}
+  secret-key: ${MINIO_SECRET_KEY:minioadmin}
+  bucket-name: ${MINIO_BUCKET:dishes}
+
+# App Config
+app:
+  wx:
+    app-id: ${WX_APP_ID:wx_test}
+    app-secret: ${WX_APP_SECRET:wx_secret_test}
+  auth:
+    allowed-openids:
+      - ${WIFE_OPENID:test_wife_openid}
+      - ${ADMIN_OPENID:test_admin_openid}
+    jwt-secret: ${JWT_SECRET:der-kitchen-jwt-secret-key-2026!!}
+    jwt-expire-days: 7
+
+# Knife4j
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+  api-docs:
+    path: /v3/api-docs
+  group-configs:
+    - group: user-api
+      display-name: 用户端接口
+      paths-to-match: /api/v1/**
+      paths-to-exclude: /api/v1/admin/**
+    - group: admin-api
+      display-name: 管理端接口
+      paths-to-match: /api/v1/admin/**
+
+knife4j:
+  enable: true
+  setting:
+    language: zh_cn
+
+# Actuator
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: when-authorized
+
+# Logging
+logging:
+  level:
+    com.der.kitchen: debug
+    org.springframework.web: info
+  pattern:
+    dateformat: yyyy-MM-dd HH:mm:ss.SSS

@@ -1,0 +1,67 @@
+version: '3.8'
+
+services:
+  app:
+    build: .
+    container_name: der-kitchen-app
+    ports:
+      - "8080:8080"
+    environment:
+      - SPRING_PROFILES_ACTIVE=prod
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=der_kitchen
+      - DB_USERNAME=postgres
+      - DB_PASSWORD=${DB_PASSWORD:-der_kitchen_2026}
+      - MINIO_ENDPOINT=http://minio:9000
+      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY:-minioadmin}
+      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY:-minioadmin}
+      - MINIO_BUCKET=dishes
+      - WX_APP_ID=${WX_APP_ID}
+      - WX_APP_SECRET=${WX_APP_SECRET}
+      - JWT_SECRET=${JWT_SECRET:-der-kitchen-jwt-secret-key-2026}
+      - WIFE_OPENID=${WIFE_OPENID}
+      - ADMIN_OPENID=${ADMIN_OPENID}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_started
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: der-kitchen-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: der_kitchen
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-der_kitchen_2026}
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+      - ./src/main/resources/db/migration:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  minio:
+    image: minio/minio:latest
+    container_name: der-kitchen-minio
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-minioadmin}
+    volumes:
+      - minio_data:/data
+    restart: unless-stopped
+
+volumes:
+  pg_data:
+  minio_data:
