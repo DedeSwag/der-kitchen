@@ -3,7 +3,7 @@ import { ref, onMounted } from 'vue'
 import { getCategories, createCategory, updateCategory, deleteCategory, batchSortCategories } from '@/api/category'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { Category } from '@/types'
-import { Rank } from '@element-plus/icons-vue'
+import draggable from 'vuedraggable'
 
 const categories = ref<Category[]>([])
 const loading = ref(false)
@@ -66,26 +66,11 @@ async function handleToggleStatus(cat: Category) {
   ElMessage.success(newStatus === 'active' ? '已显示' : '已隐藏')
 }
 
-// 简易拖拽排序（使用上移/下移按钮代替拖拽库）
-async function moveUp(index: number) {
-  if (index === 0) return
-  const arr = [...categories.value]
-  ;[arr[index - 1], arr[index]] = [arr[index], arr[index - 1]]
-  categories.value = arr
-  await saveSortOrder()
-}
-
-async function moveDown(index: number) {
-  if (index === categories.value.length - 1) return
-  const arr = [...categories.value]
-  ;[arr[index], arr[index + 1]] = [arr[index + 1], arr[index]]
-  categories.value = arr
-  await saveSortOrder()
-}
-
-async function saveSortOrder() {
+// 拖拽结束保存排序
+async function onDragEnd() {
   const sortList = categories.value.map((c, i) => ({ id: c.id, sortOrder: i }))
   await batchSortCategories(sortList)
+  ElMessage.success('排序已更新')
 }
 
 onMounted(fetchCategories)
@@ -98,33 +83,40 @@ onMounted(fetchCategories)
       <el-button type="primary" @click="openCreate">+ 新增分类</el-button>
     </div>
 
-    <el-table :data="categories" v-loading="loading" stripe>
-      <el-table-column label="排序" width="100">
-        <template #default="{ $index }">
-          <el-button-group size="small">
-            <el-button :disabled="$index === 0" @click="moveUp($index)" :icon="Rank">↑</el-button>
-            <el-button :disabled="$index === categories.length - 1" @click="moveDown($index)">↓</el-button>
-          </el-button-group>
-        </template>
-      </el-table-column>
-      <el-table-column prop="name" label="分类名称" min-width="200" />
-      <el-table-column label="状态" width="100">
-        <template #default="{ row }">
-          <el-tag :type="row.status === 'active' ? 'success' : 'info'" size="small">
-            {{ row.status === 'active' ? '显示' : '隐藏' }}
-          </el-tag>
-        </template>
-      </el-table-column>
-      <el-table-column label="操作" width="220">
-        <template #default="{ row }">
-          <el-button text type="primary" size="small" @click="openEdit(row)">编辑</el-button>
-          <el-button text size="small" @click="handleToggleStatus(row)">
-            {{ row.status === 'active' ? '隐藏' : '显示' }}
-          </el-button>
-          <el-button text type="danger" size="small" @click="handleDelete(row)">删除</el-button>
-        </template>
-      </el-table-column>
-    </el-table>
+    <p class="drag-tip">💡 拖拽卡片即可调整排序</p>
+
+    <draggable
+      v-model="categories"
+      item-key="id"
+      handle=".drag-handle"
+      ghost-class="ghost-card"
+      animation="250"
+      @end="onDragEnd"
+    >
+      <template #item="{ element, index }">
+        <div class="category-card" :class="{ hidden: element.status !== 'active' }">
+          <div class="drag-handle">
+            <el-icon :size="18"><Rank /></el-icon>
+          </div>
+          <div class="card-index">{{ index + 1 }}</div>
+          <div class="card-name">{{ element.name }}</div>
+          <div class="card-status">
+            <el-tag :type="element.status === 'active' ? 'success' : 'info'" size="small" effect="light">
+              {{ element.status === 'active' ? '显示' : '隐藏' }}
+            </el-tag>
+          </div>
+          <div class="card-actions">
+            <el-button text type="primary" size="small" @click="openEdit(element)">编辑</el-button>
+            <el-button text size="small" @click="handleToggleStatus(element)">
+              {{ element.status === 'active' ? '隐藏' : '显示' }}
+            </el-button>
+            <el-button text type="danger" size="small" @click="handleDelete(element)">删除</el-button>
+          </div>
+        </div>
+      </template>
+    </draggable>
+
+    <el-empty v-if="!loading && categories.length === 0" description="还没有分类，快去添加吧~" />
 
     <!-- 新增/编辑弹窗 -->
     <el-dialog v-model="dialogVisible" :title="dialogTitle" width="400px">
@@ -137,7 +129,102 @@ onMounted(fetchCategories)
   </div>
 </template>
 
+<script lang="ts">
+import { Rank } from '@element-plus/icons-vue'
+export default { components: { Rank } }
+</script>
+
 <style scoped lang="scss">
-.categories-page { background:#fff; border-radius:8px; padding:20px; }
-.page-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; h3 { font-size:16px; } }
+.categories-page {
+  background: #fff;
+  border-radius: 8px;
+  padding: 24px;
+  min-height: 400px;
+}
+
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  h3 { font-size: 16px; margin: 0; }
+}
+
+.drag-tip {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-bottom: 16px;
+}
+
+/* ===== 卡片列表 ===== */
+.category-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  background: #fafbfc;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  margin-bottom: 10px;
+  transition: box-shadow 0.2s, transform 0.15s;
+
+  &:hover {
+    box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+    transform: translateY(-1px);
+  }
+
+  &.hidden {
+    opacity: 0.6;
+  }
+}
+
+.drag-handle {
+  cursor: grab;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  padding: 4px;
+  border-radius: 4px;
+
+  &:hover { background: #e8e8e8; color: var(--color-primary); }
+  &:active { cursor: grabbing; }
+}
+
+.card-index {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--color-primary);
+  color: #fff;
+  font-size: 12px;
+  font-weight: bold;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.card-name {
+  flex: 1;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.card-status {
+  flex-shrink: 0;
+}
+
+.card-actions {
+  flex-shrink: 0;
+  display: flex;
+  gap: 4px;
+}
+
+/* 拖拽占位样式 */
+.ghost-card {
+  opacity: 0.4;
+  background: #e6f7ff !important;
+  border-color: var(--color-primary) !important;
+}
 </style>

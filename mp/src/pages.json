@@ -1,0 +1,31 @@
+{
+  "pages": [
+    { "path": "pages/home/index", "style": { "navigationBarTitleText": "陈哥厨房" } },
+    { "path": "pages/dish/detail", "style": { "navigationBarTitleText": "菜品详情" } },
+    { "path": "pages/order/list", "style": { "navigationBarTitleText": "我的订单" } },
+    { "path": "pages/order/confirm", "style": { "navigationBarTitleText": "确认订单" } },
+    { "path": "pages/order/detail", "style": { "navigationBarTitleText": "订单详情" } },
+    { "path": "pages/mine/index", "style": { "navigationBarTitleText": "个人中心" } },
+    { "path": "pages/mine/favorites", "style": { "navigationBarTitleText": "我的收藏" } },
+    { "path": "pages/admin/workbench", "style": { "navigationBarTitleText": "接单工作台", "navigationBarBackgroundColor": "#1F2937", "navigationBarTextStyle": "white" } },
+    { "path": "pages/admin/listing", "style": { "navigationBarTitleText": "快速上下架" } }
+  ],
+  "globalStyle": {
+    "navigationBarTextStyle": "black",
+    "navigationBarTitleText": "陈哥厨房",
+    "navigationBarBackgroundColor": "#FFFFFF",
+    "backgroundColor": "#F8F8F8",
+    "backgroundTextStyle": "dark"
+  },
+  "tabBar": {
+    "color": "#999999",
+    "selectedColor": "#FF6B35",
+    "backgroundColor": "#FFFFFF",
+    "borderStyle": "white",
+    "list": [
+      { "pagePath": "pages/home/index", "text": "点菜", "iconPath": "static/tab/home.png", "selectedIconPath": "static/tab/home-active.png" },
+      { "pagePath": "pages/order/list", "text": "订单", "iconPath": "static/tab/order.png", "selectedIconPath": "static/tab/order-active.png" },
+      { "pagePath": "pages/mine/index", "text": "我的", "iconPath": "static/tab/mine.png", "selectedIconPath": "static/tab/mine-active.png" }
+    ]
+  }
+}

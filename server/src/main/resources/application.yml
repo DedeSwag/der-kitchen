@@ -45,8 +45,8 @@ minio:
 # App Config
 app:
   wx:
-    app-id: ${WX_APP_ID:wx_test}
-    app-secret: ${WX_APP_SECRET:wx_secret_test}
+    app-id: wx5101c76e51193c94
+    app-secret: 741f937f1754222ae65dae571c6f59a4
   auth:
     allowed-openids:
       - ${WIFE_OPENID:test_wife_openid}

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onActivated } from 'vue'
 import { useRouter } from 'vue-router'
 import { getDishes, updateDishListing, updateDishStatus, deleteDish } from '@/api/dish'
 import { getCategories } from '@/api/category'
@@ -74,6 +74,7 @@ function handleSearch() { pageNum.value = 1; fetchDishes() }
 function handleReset() { filters.value = { categoryId: undefined, status: undefined, isListed: undefined }; handleSearch() }
 
 onMounted(() => { fetchCategories(); fetchDishes() })
+onActivated(() => { fetchDishes() })
 </script>
 
 <template>
