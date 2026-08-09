@@ -5,11 +5,14 @@ import { useUserStore } from '@/stores/user'
 import SideMenu from '@/components/SideMenu.vue'
 import { Bell, CaretBottom, Fold, Expand } from '@element-plus/icons-vue'
 import { ElMessageBox } from 'element-plus'
+import { useAdminRealtime } from '@/composables/useAdminRealtime'
 
 const router = useRouter()
 const route = useRoute()
 const appStore = useAppStore()
 const userStore = useUserStore()
+
+useAdminRealtime()
 
 async function handleLogout() {
   try {
@@ -17,6 +20,13 @@ async function handleLogout() {
     userStore.logout()
     router.push('/login')
   } catch { /* 取消 */ }
+}
+
+async function handleNotificationClick() {
+  if ('Notification' in window && Notification.permission === 'default') {
+    await Notification.requestPermission()
+  }
+  await router.push('/orders')
 }
 </script>
 
@@ -31,7 +41,7 @@ async function handleLogout() {
       <div class="header-actions">
         <!-- 待处理订单铃铛 -->
         <el-badge :value="appStore.pendingCount" :max="99" :hidden="appStore.pendingCount === 0">
-          <el-button :icon="Bell" circle @click="router.push('/orders')" />
+          <el-button :icon="Bell" circle @click="handleNotificationClick" />
         </el-badge>
         <!-- 用户下拉 -->
         <el-dropdown @command="(cmd: string) => cmd === 'logout' && handleLogout()">

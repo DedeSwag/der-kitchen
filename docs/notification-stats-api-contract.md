@@ -16,7 +16,9 @@
 
 `biz_order_event` 保存操作者、前后状态、菜品数量和说明；`sys_notification` 同时承载站内通知与微信投递记录，并通过 `(event_id, recipient_id, channel)` 唯一约束防止重复创建。
 
-站内通知直接标记为 `delivered`。管理端和管理员小程序每 3 秒使用 `afterId` 增量轮询；收到创建、加菜或取消通知后刷新订单。待接单角标仍调用 `/api/v1/admin/orders/pending-count`，其唯一口径是未删除且 `status = pending` 的订单数。
+站内通知直接标记为 `delivered`。Web 管理端通过 `/api/v1/admin/realtime/stream` 建立 SSE 连接，使用 `biz_order_event.id` 作为 `Last-Event-ID` 游标；创建、加菜、取消和状态流转事件都会使相关页面重新查询权威数据。断线期间的事件从数据库补发，单次补发超过 500 条时客户端执行全量刷新。管理员小程序暂时保留 `afterId` 增量轮询。待接单角标的唯一口径是未删除且 `status = pending` 的订单数。
+
+SSE 只在订单事务提交后发送，实时连接不是可靠存储。单实例部署使用进程内连接注册表；多实例部署时需要通过 Redis Pub/Sub 或 PostgreSQL `LISTEN/NOTIFY` 将已提交的事件 ID 广播到各实例，数据库事件表仍负责断线补偿。连接每 20 秒发送心跳，并在 30 分钟后由客户端重新连接、重新鉴权。
 
 微信消息使用以下状态机：
 
@@ -120,6 +122,7 @@ pending/failed -> processing -> sent
 | 管理菜品 | `/api/v1/admin/dishes...` |
 | 管理订单 | `/api/v1/admin/orders...`、`/api/v1/admin/orders/pending-count` |
 | 管理通知 | `/api/v1/admin/notifications`、`/api/v1/admin/notifications/unread-count`、`/api/v1/admin/notifications/subscription-config`、`/api/v1/admin/notifications/{id}/read`、`/api/v1/admin/notifications/read-all` |
+| 管理端实时事件 | `/api/v1/admin/realtime/bootstrap`、`/api/v1/admin/realtime/stream` |
 | 管理统计 | `/api/v1/admin/stats/overview`、`/api/v1/admin/stats/top-dishes`、`/api/v1/admin/stats/daily` |
 | 文件 | `/api/common/file/upload`、`/api/common/file/{fileId}` |
 

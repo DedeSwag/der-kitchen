@@ -2,6 +2,7 @@
 import { ref, onMounted, onUnmounted, nextTick } from 'vue'
 import * as echarts from 'echarts'
 import { getTopDishes, getDailySummary } from '@/api/stats'
+import { useOrderRealtimeRefresh } from '@/composables/useOrderRealtimeRefresh'
 
 // 日期快捷
 const shortcuts = [
@@ -62,6 +63,8 @@ async function fetchData() {
     })
   }
 }
+
+useOrderRealtimeRefresh(fetchData, () => true, 500)
 
 function handleResize() {
   barChart?.resize()

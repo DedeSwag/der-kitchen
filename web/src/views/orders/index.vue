@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { getOrders, transitOrderStatus } from '@/api/order'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { Order } from '@/types'
+import { useOrderRealtimeRefresh } from '@/composables/useOrderRealtimeRefresh'
 
 const router = useRouter()
 
@@ -57,6 +58,8 @@ async function fetchOrders() {
     total.value = res.total
   } finally { loading.value = false }
 }
+
+useOrderRealtimeRefresh(fetchOrders)
 
 async function handleTransit(id: number, status: string) {
   if (status === 'cancelled') {

@@ -3,12 +3,11 @@ import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { getOverview } from '@/api/stats'
 import { getOrders, transitOrderStatus } from '@/api/order'
-import { useOrderPolling } from '@/composables/useOrderPolling'
+import { useOrderRealtimeRefresh } from '@/composables/useOrderRealtimeRefresh'
 import { ElMessage } from 'element-plus'
 import type { StatsOverview, Order } from '@/types'
 
 const router = useRouter()
-useOrderPolling()
 
 const overview = ref<StatsOverview>({ todayOrders: 0, pendingOrders: 0, totalDishes: 0, weekOrders: 0 })
 const pendingOrders = ref<Order[]>([])
@@ -28,6 +27,12 @@ async function fetchPendingOrders() {
   }
 }
 
+async function refreshDashboard() {
+  await Promise.all([fetchOverview(), fetchPendingOrders()])
+}
+
+useOrderRealtimeRefresh(refreshDashboard)
+
 async function handleTransit(orderId: number, status: string) {
   await transitOrderStatus(orderId, status)
   ElMessage.success('操作成功')
@@ -41,8 +46,7 @@ function getMealTypeLabel(type: string) {
 }
 
 onMounted(() => {
-  fetchOverview()
-  fetchPendingOrders()
+  void refreshDashboard()
 })
 </script>
 

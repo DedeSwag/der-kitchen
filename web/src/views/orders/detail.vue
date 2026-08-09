@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { getOrderDetail, transitOrderStatus } from '@/api/order'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { OrderDetail } from '@/types'
+import { useOrderRealtimeRefresh } from '@/composables/useOrderRealtimeRefresh'
 
 const route = useRoute()
 const router = useRouter()
@@ -25,6 +26,8 @@ async function fetchDetail() {
   try { order.value = await getOrderDetail(orderId) }
   finally { loading.value = false }
 }
+
+useOrderRealtimeRefresh(fetchDetail, event => event.orderId === orderId)
 
 async function handleTransit(status: string) {
   if (status === 'cancelled') {

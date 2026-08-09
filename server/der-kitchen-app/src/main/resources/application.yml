@@ -80,6 +80,8 @@ app:
       - ${ADMIN_OPENID:test_admin_openid}
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:12000,http://127.0.0.1:12000,http://localhost:12001,http://127.0.0.1:12001}
+  realtime:
+    heartbeat-millis: ${REALTIME_HEARTBEAT_MILLIS:20000}
 
 sa-token:
   token-name: Authorization

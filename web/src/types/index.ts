@@ -88,6 +88,24 @@ export interface AdminNotification {
   createTime: string
 }
 
+export interface RealtimeBootstrap {
+  cursor: number
+  pendingCount: number
+}
+
+export interface AdminRealtimeEvent {
+  schemaVersion: 1
+  eventId: number
+  eventType: 'order_created' | 'items_added' | 'user_cancelled' | 'status_changed'
+  orderId: number
+  fromStatus?: string
+  toStatus?: string
+  itemCount?: number
+  description: string
+  createTime: string
+  notification?: AdminNotification
+}
+
 export interface StatsOverview {
   todayOrders: number
   pendingOrders: number
