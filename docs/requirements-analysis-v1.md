@@ -1,5 +1,7 @@
 # 陈哥厨房小程序 V1.0 一期需求分析文档
 
+> 2026-08-08 实现决策：需求草案中的菜品 `image_url` 不再持久化。当前模型只保存 `image_file_id → sys_file.id`，接口响应时动态生成短期 `imageUrl`。
+
 > 编写日期：2026-05-22  
 > 版本：V1.0  
 > 状态：需求分析阶段
@@ -190,7 +192,7 @@
 | id | string | 菜品ID |
 | name | string | 菜品名称 |
 | description | string | 菜品简介 |
-| image_url | string | 菜品图片URL |
+| image_file_id | string | 菜品图片文件ID，外键指向 `sys_file`；URL仅在接口读取时临时生成 |
 | category_id | string | 所属分类ID |
 | cooking_time | int | 预计烹饪时长（分钟） |
 | status | enum | normal / out_of_stock / unavailable |
@@ -307,31 +309,32 @@
 
 | 接口 | 方法 | 说明 |
 |------|------|------|
-| /api/categories | GET | 获取菜品分类列表 |
-| /api/dishes | GET | 获取菜品列表（支持分类筛选） |
-| /api/dishes/:id | GET | 获取菜品详情 |
-| /api/favorites | GET | 获取收藏列表 |
-| /api/favorites | POST | 添加收藏 |
-| /api/favorites/:id | DELETE | 取消收藏 |
-| /api/orders | POST | 创建订单 |
-| /api/orders | GET | 获取订单列表 |
-| /api/orders/:id | GET | 获取订单详情 |
-| /api/orders/:id/cancel | POST | 取消订单 |
-| /api/orders/:id/items | POST | 追加菜品（加菜） |
+| /api/v1/categories | GET | 获取菜品分类列表 |
+| /api/v1/dishes | GET | 获取菜品列表（支持分类筛选） |
+| /api/v1/dishes/:id | GET | 获取菜品详情 |
+| /api/v1/favorites | GET | 获取收藏列表 |
+| /api/v1/favorites | POST | 添加收藏 |
+| /api/v1/favorites/:dishId | DELETE | 取消收藏 |
+| /api/v1/orders | POST | 创建订单 |
+| /api/v1/orders | GET | 获取订单列表 |
+| /api/v1/orders/:id | GET | 获取订单详情 |
+| /api/v1/orders/:id/cancel | POST | 取消订单 |
+| /api/v1/orders/:id/items | POST | 追加菜品（加菜） |
 
 ### 5.2 管理端 API
 
 | 接口 | 方法 | 说明 |
 |------|------|------|
-| /api/admin/categories | CRUD | 分类管理 |
-| /api/admin/dishes | CRUD | 菜品管理 |
-| /api/admin/dishes/:id/status | PUT | 更新菜品状态 |
-| /api/admin/dishes/:id/listing | PUT | 上下架操作 |
-| /api/admin/orders | GET | 订单列表（筛选） |
-| /api/admin/orders/:id/status | PUT | 更新订单状态 |
-| /api/admin/stats/top-dishes | GET | 高频菜品统计 |
-| /api/admin/stats/daily | GET | 每日汇总 |
-| /api/admin/stats/weekly | GET | 每周汇总 |
+| /api/v1/admin/categories | CRUD | 分类管理 |
+| /api/v1/admin/dishes | CRUD | 菜品管理 |
+| /api/v1/admin/dishes/:id/status | PUT | 更新菜品状态 |
+| /api/v1/admin/dishes/:id/listing | PUT | 上下架操作 |
+| /api/v1/admin/orders | GET | 订单列表（筛选） |
+| /api/v1/admin/orders/:id/status | PUT | 更新订单状态 |
+| /api/v1/admin/notifications | GET | 管理员站内通知增量查询 |
+| /api/v1/admin/stats/overview | GET | 工作台统计概览 |
+| /api/v1/admin/stats/top-dishes | GET | 高频菜品统计 |
+| /api/v1/admin/stats/daily | GET | 每日汇总 |
 
 ---
 

@@ -9,6 +9,18 @@ const request = axios.create({
   timeout: 15000,
 })
 
+export class ApiError extends Error {
+  readonly code: number
+  readonly status: number
+
+  constructor(message: string, code: number, status: number) {
+    super(message)
+    this.name = 'ApiError'
+    this.code = code
+    this.status = status
+  }
+}
+
 // 请求拦截器
 request.interceptors.request.use((config) => {
   const userStore = useUserStore()
@@ -29,7 +41,7 @@ request.interceptors.response.use(
         userStore.logout()
         router.push('/login')
       }
-      return Promise.reject(new Error(res.message))
+      return Promise.reject(new ApiError(res.message, res.code, response.status))
     }
     return res.data
   },
@@ -41,7 +53,9 @@ request.interceptors.response.use(
       userStore.logout()
       router.push('/login')
     }
-    return Promise.reject(error)
+    const status = error.response?.status || 0
+    const code = error.response?.data?.code || status
+    return Promise.reject(new ApiError(msg, code, status))
   }
 )
 

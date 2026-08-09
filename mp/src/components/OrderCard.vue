@@ -22,6 +22,7 @@
 import { computed } from 'vue'
 import { useCartStore } from '@/stores/cart'
 import type { Order } from '@/types'
+import { formatMealLabel } from '@/utils/order'
 
 const props = defineProps<{ order: Order }>()
 
@@ -33,16 +34,9 @@ const statusMap: Record<string, { label: string; icon: string }> = {
   cancelled: { label: '已取消', icon: '✗' },
 }
 
-const mealMap: Record<string, string> = {
-  today_lunch: '今日午餐',
-  today_dinner: '今日晚餐',
-  tomorrow_lunch: '明日午餐',
-  tomorrow_dinner: '明日晚餐',
-}
-
 const statusLabel = computed(() => statusMap[props.order.status]?.label || props.order.status)
 const statusIcon = computed(() => statusMap[props.order.status]?.icon || '')
-const mealLabel = computed(() => mealMap[props.order.mealType] || props.order.mealType)
+const mealLabel = computed(() => formatMealLabel(props.order.mealDate, props.order.mealType))
 
 const dishesSummary = computed(() => {
   if (!props.order.items?.length) return '暂无菜品信息'
@@ -66,7 +60,7 @@ function handleAddExtra() {
 function handleReorder() {
   const cartStore = useCartStore()
   const dishes = props.order.items.map(i => ({
-    dish: { id: i.dishId, name: i.dishName, imageUrl: i.dishImage, categoryId: 0, description: '', cookingTime: null, status: 'normal', isListed: true } as any,
+    dish: { id: i.dishId, name: i.dishName, imageUrl: '', categoryId: 0, description: '', cookingTime: null, status: 'normal', isListed: true } as any,
     quantity: i.quantity,
   }))
   cartStore.batchAdd(dishes)

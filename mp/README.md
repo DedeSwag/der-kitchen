@@ -131,10 +131,11 @@ mp/
 ```typescript
 UserInfo { id, nickname, avatarUrl, role }
 Category { id, name, sortOrder, status }
-Dish { id, name, categoryId, imageUrl, description, cookingTime, status, isListed }
+Dish { id, name, categoryId, imageFileId, imageUrl?, description?, cookingTime?, status, isListed }
 CartItem { dish: Dish, quantity }
-Order { id, orderNo, mealType, status, flavorTags, avoidNote, specialNote, items, createTime }
-OrderItem { id, dishId, dishName, dishImage, quantity, isExtra }
+Order { id, userId, mealType, mealDate, status, tasteTags, dietaryNotes, specialRequests, items, createTime, updateTime }
+OrderItem { id, dishId, dishName, quantity, isExtra }
+PageResult<T> { records, total, pageNum, pageSize }
 ```
 
 ### 4.5 订单状态流转
@@ -176,7 +177,7 @@ cancelled（已取消）
 | GET | `/orders` | 获取订单列表（支持 status 筛选、分页） |
 | GET | `/orders/:id` | 获取订单详情 |
 | POST | `/orders/:id/items` | 临时加菜 |
-| PUT | `/orders/:id/cancel` | 取消订单 |
+| POST | `/orders/:id/cancel` | 取消订单 |
 
 ### 管理端
 
@@ -186,8 +187,13 @@ cancelled（已取消）
 | PUT | `/admin/dishes/:id/listing` | 单个菜品上下架 |
 | PUT | `/admin/dishes/batch-listing` | 批量上下架 |
 | GET | `/admin/orders` | 管理端订单列表 |
-| PUT | `/admin/orders/:id/transit` | 推进订单状态 |
+| PUT | `/admin/orders/:id/status` | 按状态机更新订单状态 |
 | GET | `/admin/orders/pending-count` | 获取待处理订单数 |
+| GET | `/admin/notifications` | 使用 `afterId` 增量获取站内通知 |
+| GET | `/admin/notifications/subscription-config` | 获取微信一次性订阅模板配置 |
+| POST | `/admin/notifications/:id/read` | 标记通知已读 |
+
+小程序请求基础地址默认是 `http://localhost:8080/api/v1`，可使用 `VITE_API_BASE_URL` 覆盖；因此表中路径均会拼接为最终 `/api/v1/...` 路径。分页请求统一使用 `pageNum/pageSize`。
 
 ---
 

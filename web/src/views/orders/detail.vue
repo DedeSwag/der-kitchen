@@ -2,7 +2,7 @@
 import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getOrderDetail, transitOrderStatus } from '@/api/order'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import type { OrderDetail } from '@/types'
 
 const route = useRoute()
@@ -13,10 +13,10 @@ const order = ref<OrderDetail | null>(null)
 const loading = ref(false)
 
 const mealMap: Record<string, string> = { breakfast: '早餐', lunch: '午餐', dinner: '晚餐' }
-const statusMap: Record<string, string> = { pending: '待处理', preparing: '制作中', completed: '已完成', cancelled: '已取消' }
+const statusMap: Record<string, string> = { pending: '待处理', preparing: '制作中', cooking: '烹饪中', completed: '已完成', cancelled: '已取消' }
 
 function getStatusType(s: string) {
-  const map: Record<string, any> = { pending: 'warning', preparing: '', completed: 'success', cancelled: 'info' }
+  const map: Record<string, any> = { pending: 'warning', preparing: '', cooking: 'danger', completed: 'success', cancelled: 'info' }
   return map[s] || ''
 }
 
@@ -27,6 +27,9 @@ async function fetchDetail() {
 }
 
 async function handleTransit(status: string) {
+  if (status === 'cancelled') {
+    await ElMessageBox.confirm('确定取消该订单吗？取消后不能恢复。', '取消订单', { type: 'warning' })
+  }
   await transitOrderStatus(orderId, status)
   ElMessage.success('操作成功')
   fetchDetail()
@@ -51,7 +54,7 @@ onMounted(fetchDetail)
         <el-descriptions-item label="餐次">{{ mealMap[order.mealType] || order.mealType }}</el-descriptions-item>
         <el-descriptions-item label="用餐日期">{{ order.mealDate }}</el-descriptions-item>
         <el-descriptions-item label="下单时间">{{ order.createTime }}</el-descriptions-item>
-        <el-descriptions-item label="口味偏好">{{ order.tasteTags || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="口味偏好">{{ order.tasteTags.length ? order.tasteTags.join('、') : '-' }}</el-descriptions-item>
         <el-descriptions-item label="忌口">{{ order.dietaryNotes || '-' }}</el-descriptions-item>
         <el-descriptions-item label="特殊要求">{{ order.specialRequests || '-' }}</el-descriptions-item>
       </el-descriptions>
@@ -72,7 +75,9 @@ onMounted(fetchDetail)
       <!-- 操作按钮 -->
       <div style="margin-top:20px;display:flex;gap:12px">
         <el-button v-if="order.status === 'pending'" type="primary" @click="handleTransit('preparing')">接单开做</el-button>
-        <el-button v-if="order.status === 'preparing'" type="success" @click="handleTransit('completed')">完成上菜</el-button>
+        <el-button v-if="order.status === 'preparing'" type="primary" @click="handleTransit('cooking')">开始烹饪</el-button>
+        <el-button v-if="order.status === 'cooking'" type="success" @click="handleTransit('completed')">完成上菜</el-button>
+        <el-button v-if="['pending', 'preparing', 'cooking'].includes(order.status)" type="danger" plain @click="handleTransit('cancelled')">取消订单</el-button>
       </div>
     </template>
   </div>

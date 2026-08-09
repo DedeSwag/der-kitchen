@@ -16,7 +16,7 @@ export const useUserStore = defineStore('user', () => {
     if (token.value) {
       try {
         const info = await getMe()
-        setUser(info)
+        setUser(toUserInfo(info))
         switchTabBar()
         return
       } catch {
@@ -34,7 +34,7 @@ export const useUserStore = defineStore('user', () => {
       const data = await wxLogin(res.code)
       token.value = data.token
       uni.setStorageSync('token', data.token)
-      setUser(data.user)
+      setUser(toUserInfo(data))
       switchTabBar()
     } catch (e) {
       console.warn('静默登录失败', e)
@@ -44,6 +44,15 @@ export const useUserStore = defineStore('user', () => {
   function setUser(info: UserInfo) {
     userInfo.value = info
     uni.setStorageSync('userInfo', JSON.stringify(info))
+  }
+
+  function toUserInfo(data: { userId: number; nickname: string; avatarUrl?: string; role: 'admin' | 'user' }): UserInfo {
+    return {
+      id: data.userId,
+      nickname: data.nickname,
+      avatarUrl: data.avatarUrl || '',
+      role: data.role,
+    }
   }
 
   /** 根据角色切换 tabBar */

@@ -22,6 +22,7 @@ const categories = ref<Category[]>([])
 const form = ref({
   name: '',
   categoryId: undefined as number | undefined,
+  imageFileId: undefined as number | undefined,
   imageUrl: '',
   description: '',
   cookingTime: undefined as number | undefined,
@@ -30,28 +31,42 @@ const form = ref({
 const rules: FormRules = {
   name: [{ required: true, message: '请输入菜品名称', trigger: 'blur' }, { max: 20, message: '不超过20字', trigger: 'blur' }],
   categoryId: [{ required: true, message: '请选择分类', trigger: 'change' }],
+  imageFileId: [{ required: true, message: '请上传菜品图片', trigger: 'change' }],
 }
 
 async function handleUpload(options: any) {
   imageLoading.value = true
   try {
     const res = await uploadFile(options.file)
-    form.value.imageUrl = res.url
+    const uploaded = res[0]
+    form.value.imageFileId = uploaded.fileId
+    form.value.imageUrl = uploaded.url
     ElMessage.success('上传成功')
   } finally { imageLoading.value = false }
 }
 
-function removeImage() { form.value.imageUrl = '' }
+function removeImage() {
+  form.value.imageFileId = undefined
+  form.value.imageUrl = ''
+}
 
 async function handleSubmit() {
   await formRef.value?.validate()
+  if (form.value.categoryId == null || form.value.imageFileId == null) return
   loading.value = true
   try {
+    const payload = {
+      name: form.value.name,
+      categoryId: form.value.categoryId,
+      imageFileId: form.value.imageFileId,
+      description: form.value.description,
+      cookingTime: form.value.cookingTime,
+    }
     if (isEdit.value) {
-      await updateDish(dishId.value!, form.value)
+      await updateDish(dishId.value!, payload)
       ElMessage.success('修改成功')
     } else {
-      await createDish(form.value)
+      await createDish(payload)
       ElMessage.success('新增成功')
     }
     router.push('/dishes')
@@ -62,7 +77,7 @@ onMounted(async () => {
   categories.value = await getCategories()
   if (isEdit.value) {
     const dish = await getDishDetail(dishId.value!)
-    form.value = { name: dish.name, categoryId: dish.categoryId, imageUrl: dish.imageUrl || '', description: dish.description || '', cookingTime: dish.cookingTime }
+    form.value = { name: dish.name, categoryId: dish.categoryId, imageFileId: dish.imageFileId, imageUrl: dish.imageUrl || '', description: dish.description || '', cookingTime: dish.cookingTime ?? undefined }
   }
 })
 </script>
@@ -79,7 +94,7 @@ onMounted(async () => {
           <el-option v-for="c in categories" :key="c.id" :label="c.name" :value="c.id" />
         </el-select>
       </el-form-item>
-      <el-form-item label="菜品图片">
+      <el-form-item label="菜品图片" prop="imageFileId">
         <div v-if="form.imageUrl" style="position:relative;display:inline-block">
           <el-image :src="form.imageUrl" fit="cover" style="width:120px;height:120px;border-radius:8px" />
           <el-button text type="danger" size="small" @click="removeImage" style="display:block;margin-top:4px">删除</el-button>

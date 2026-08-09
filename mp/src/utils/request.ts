@@ -1,5 +1,17 @@
 // 请求基础配置
-const BASE_URL = 'http://localhost:8080/api/v1'
+const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api/v1'
+
+export class ApiError extends Error {
+  readonly code: number
+  readonly status: number
+
+  constructor(message: string, code: number, status: number) {
+    super(message)
+    this.name = 'ApiError'
+    this.code = code
+    this.status = status
+  }
+}
 
 interface RequestOptions {
   url: string
@@ -61,25 +73,27 @@ export function request<T = any>(options: RequestOptions): Promise<T> {
           uni.removeStorageSync('userInfo')
           // 尝试静默重新登录
           reLogin()
-          reject(new Error('登录已过期'))
+          reject(new ApiError('登录已过期', 401, 401))
           return
         }
 
         if (statusCode >= 200 && statusCode < 300) {
           const result = res.data as ApiResult<T>
-          if (result.code === 0) {
+          if (result.code === 200) {
             resolve(result.data)
           } else {
             if (showError) {
               uni.showToast({ title: result.message || '请求失败', icon: 'none' })
             }
-            reject(new Error(result.message))
+            reject(new ApiError(result.message, result.code, statusCode))
           }
         } else {
+          const result = res.data as Partial<ApiResult<T>>
+          const message = result?.message || `请求失败(${statusCode})`
           if (showError) {
-            uni.showToast({ title: `请求失败(${statusCode})`, icon: 'none' })
+            uni.showToast({ title: message, icon: 'none' })
           }
-          reject(new Error(`HTTP ${statusCode}`))
+          reject(new ApiError(message, result?.code || statusCode, statusCode))
         }
       },
       fail: (err) => {

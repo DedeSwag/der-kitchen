@@ -1,6 +1,10 @@
 import request from '@/utils/request'
 import type { Dish, PageResult } from '@/types'
 
+export type DishCreatePayload = Pick<Dish, 'name' | 'categoryId' | 'imageFileId'>
+  & Partial<Pick<Dish, 'description' | 'cookingTime'>>
+export type DishUpdatePayload = Partial<DishCreatePayload>
+
 export function getDishes(params: {
   categoryId?: number
   status?: string
@@ -12,14 +16,14 @@ export function getDishes(params: {
 }
 
 export function getDishDetail(id: number) {
-  return request.get<any, Dish>(`/api/v1/dishes/${id}`)
+  return request.get<any, Dish>(`/api/v1/admin/dishes/${id}`)
 }
 
-export function createDish(data: Partial<Dish>) {
+export function createDish(data: DishCreatePayload) {
   return request.post<any, Dish>('/api/v1/admin/dishes', data)
 }
 
-export function updateDish(id: number, data: Partial<Dish>) {
+export function updateDish(id: number, data: DishUpdatePayload) {
   return request.put<any, Dish>(`/api/v1/admin/dishes/${id}`, data)
 }
 

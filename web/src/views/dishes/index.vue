@@ -98,7 +98,7 @@ onActivated(() => { fetchDishes() })
     <el-table :data="dishes" v-loading="loading" stripe>
       <el-table-column label="图片" width="80">
         <template #default="{ row }">
-          <el-image v-if="row.imageUrl" :src="row.imageUrl" style="width:50px;height:50px;border-radius:6px" fit="cover" />
+          <el-image v-if="row.thumbnailUrl || row.imageUrl" :src="row.thumbnailUrl || row.imageUrl" style="width:50px;height:50px;border-radius:6px" fit="cover" />
           <span v-else style="color:#ccc">无图</span>
         </template>
       </el-table-column>

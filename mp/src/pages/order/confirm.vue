@@ -90,6 +90,7 @@ import { onLoad } from '@dcloudio/uni-app'
 import { useCartStore } from '@/stores/cart'
 import { useAppStore } from '@/stores/app'
 import { createOrder, addOrderItems } from '@/api/order'
+import { toMealRequest } from '@/utils/order'
 import Confetti from '@/components/Confetti.vue'
 
 const cartStore = useCartStore()
@@ -106,6 +107,7 @@ let extraOrderId: number | null = null
 const mealOptions = [
   { label: '今日午餐', value: 'today_lunch' },
   { label: '今日晚餐', value: 'today_dinner' },
+  { label: '明日早餐', value: 'tomorrow_breakfast' },
   { label: '明日午餐', value: 'tomorrow_lunch' },
   { label: '明日晚餐', value: 'tomorrow_dinner' },
 ]
@@ -152,12 +154,13 @@ async function handleSubmit() {
       }, 1200)
     } else {
       // 新建订单
+      const meal = toMealRequest(selectedMeal.value)
       const order = await createOrder({
-        mealType: selectedMeal.value,
+        ...meal,
         items,
-        flavorTags: selectedFlavors.value.join(','),
-        avoidNote: avoidNote.value.trim(),
-        specialNote: specialNote.value.trim(),
+        tasteTags: selectedFlavors.value,
+        dietaryNotes: avoidNote.value.trim(),
+        specialRequests: specialNote.value.trim(),
       })
       cartStore.clear()
       confettiRef.value?.play()

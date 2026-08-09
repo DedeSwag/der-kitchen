@@ -34,7 +34,7 @@
 import { ref, computed } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { getAdminDishes, updateDishListing, batchDishListing } from '@/api/dish'
-import { getCategories } from '@/api/category'
+import { getAdminCategories } from '@/api/category'
 import type { Dish, Category } from '@/types'
 
 const allDishes = ref<Dish[]>([])
@@ -60,11 +60,16 @@ async function loadData() {
   loading.value = true
   try {
     const [catRes, dishRes] = await Promise.all([
-      getCategories(),
-      getAdminDishes({ pageNum: 1, pageSize: 200 }),
+      getAdminCategories(),
+      getAdminDishes({ pageNum: 1, pageSize: 100 }),
     ])
     categories.value = catRes
-    allDishes.value = dishRes.records
+    const pageCount = Math.ceil(dishRes.total / 100)
+    const remainingPages = pageCount > 1
+      ? await Promise.all(Array.from({ length: pageCount - 1 }, (_, i) =>
+          getAdminDishes({ pageNum: i + 2, pageSize: 100 })))
+      : []
+    allDishes.value = [dishRes, ...remainingPages].flatMap(page => page.records)
   } catch { /* 忽略 */ }
   loading.value = false
 }
@@ -87,7 +92,7 @@ async function handleBatchListing(isListed: boolean) {
     success: async (res) => {
       if (res.confirm) {
         try {
-          await batchDishListing(isListed)
+          await batchDishListing(allDishes.value.map(d => d.id), isListed)
           allDishes.value.forEach(d => { d.isListed = isListed })
           uni.showToast({ title: `已全部${isListed ? '上架' : '下架'}`, icon: 'success' })
         } catch {

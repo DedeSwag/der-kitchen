@@ -23,7 +23,7 @@
     <view class="section">
       <text class="section-title">菜品明细</text>
       <view v-for="item in normalItems" :key="item.id" class="item-row">
-        <image class="item-img" :src="item.dishImage || '/static/default-dish.png'" mode="aspectFill" />
+        <image class="item-img" src="/static/default-dish.png" mode="aspectFill" />
         <text class="item-name ellipsis">{{ item.dishName }}</text>
         <text class="item-qty">×{{ item.quantity }}</text>
       </view>
@@ -32,18 +32,18 @@
         <text>── 加菜 ──</text>
       </view>
       <view v-for="item in extraItems" :key="item.id" class="item-row extra">
-        <image class="item-img" :src="item.dishImage || '/static/default-dish.png'" mode="aspectFill" />
+        <image class="item-img" src="/static/default-dish.png" mode="aspectFill" />
         <text class="item-name ellipsis">{{ item.dishName }}</text>
         <text class="item-qty">×{{ item.quantity }}</text>
       </view>
     </view>
 
     <!-- 备注信息 -->
-    <view v-if="order.flavorTags || order.avoidNote || order.specialNote" class="section">
+    <view v-if="order.tasteTags.length || order.dietaryNotes || order.specialRequests" class="section">
       <text class="section-title">备注信息</text>
-      <view v-if="order.flavorTags" class="note-row"><text>🏷️ 口味：{{ order.flavorTags }}</text></view>
-      <view v-if="order.avoidNote" class="note-row"><text>🚫 忌口：{{ order.avoidNote }}</text></view>
-      <view v-if="order.specialNote" class="note-row"><text>✨ 特殊：{{ order.specialNote }}</text></view>
+      <view v-if="order.tasteTags.length" class="note-row"><text>🏷️ 口味：{{ order.tasteTags.join('、') }}</text></view>
+      <view v-if="order.dietaryNotes" class="note-row"><text>🚫 忌口：{{ order.dietaryNotes }}</text></view>
+      <view v-if="order.specialRequests" class="note-row"><text>✨ 特殊：{{ order.specialRequests }}</text></view>
     </view>
 
     <!-- 操作按钮 -->
@@ -62,10 +62,11 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import { onLoad, onShow } from '@dcloudio/uni-app'
+import { onHide, onLoad, onShow, onUnload } from '@dcloudio/uni-app'
 import { getOrderDetail, cancelOrder } from '@/api/order'
 import { useCartStore } from '@/stores/cart'
 import type { Order } from '@/types'
+import { formatMealLabel } from '@/utils/order'
 
 const order = ref<Order | null>(null)
 let orderId = 0
@@ -86,11 +87,6 @@ const statusMap: Record<string, { label: string; icon: string }> = {
   cancelled: { label: '已取消', icon: '✗' },
 }
 
-const mealMap: Record<string, string> = {
-  today_lunch: '今日午餐', today_dinner: '今日晚餐',
-  tomorrow_lunch: '明日午餐', tomorrow_dinner: '明日晚餐',
-}
-
 const stepIndex = computed(() => {
   if (!order.value) return -1
   if (order.value.status === 'cancelled') return -1
@@ -99,7 +95,9 @@ const stepIndex = computed(() => {
 
 const statusLabel = computed(() => statusMap[order.value?.status || '']?.label || '')
 const statusIcon = computed(() => statusMap[order.value?.status || '']?.icon || '')
-const mealLabel = computed(() => mealMap[order.value?.mealType || ''] || '')
+const mealLabel = computed(() => order.value
+  ? formatMealLabel(order.value.mealDate, order.value.mealType)
+  : '')
 
 const normalItems = computed(() => order.value?.items?.filter(i => !i.isExtra) || [])
 const extraItems = computed(() => order.value?.items?.filter(i => i.isExtra) || [])
@@ -128,6 +126,8 @@ onShow(() => {
   if (orderId) loadDetail()
   startPoll()
 })
+onHide(stopPoll)
+onUnload(stopPoll)
 
 async function loadDetail() {
   try {
@@ -155,13 +155,10 @@ function handleAddExtra() {
 }
 
 async function handleCancel() {
-  const [err] = await uni.showModal({ title: '确认撤销', content: '确定要撤销这个订单吗？', confirmText: '确定撤销', confirmColor: '#FF4D4F' }) as any
-  if (err || !err === false) {
-    // showModal 返回结构不同，兼容处理
-  }
   uni.showModal({
     title: '确认撤销',
     content: '确定要撤销这个订单吗？',
+    confirmText: '确定撤销',
     confirmColor: '#FF4D4F',
     success: async (res) => {
       if (res.confirm) {
@@ -188,7 +185,7 @@ function handleReorder() {
   if (!order.value) return
   const cartStore = useCartStore()
   const dishes = order.value.items.map(i => ({
-    dish: { id: i.dishId, name: i.dishName, imageUrl: i.dishImage, categoryId: 0, description: '', cookingTime: null, status: 'normal', isListed: true } as any,
+    dish: { id: i.dishId, name: i.dishName, imageUrl: '', categoryId: 0, description: '', cookingTime: null, status: 'normal', isListed: true } as any,
     quantity: i.quantity,
   }))
   cartStore.batchAdd(dishes)

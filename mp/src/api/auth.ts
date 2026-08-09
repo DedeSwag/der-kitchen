@@ -8,7 +8,7 @@ export function wxLogin(code: string) {
 
 /** 获取当前用户信息 */
 export function getMe() {
-  return http.get<any>('/auth/me')
+  return http.get<LoginResponse>('/auth/me')
 }
 
 /** 修改密码（管理员） */

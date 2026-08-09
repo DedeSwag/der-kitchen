@@ -2,8 +2,8 @@ import { http } from '@/utils/request'
 import type { Dish, PageResult } from '@/types'
 
 /** 获取菜品列表（用户端，仅上架） */
-export function getDishes(params?: { categoryId?: number; pageNum?: number; pageSize?: number }) {
-  return http.get<PageResult<Dish>>('/dishes', params)
+export function getDishes(params?: { categoryId?: number }) {
+  return http.get<Dish[]>('/dishes', params)
 }
 
 /** 获取菜品详情 */
@@ -24,6 +24,6 @@ export function updateDishListing(id: number, isListed: boolean) {
 }
 
 /** 批量上下架 */
-export function batchDishListing(isListed: boolean) {
-  return http.put('/admin/dishes/batch-listing', { isListed })
+export function batchDishListing(ids: number[], isListed: boolean) {
+  return http.put('/admin/dishes/batch-listing', { ids, isListed })
 }

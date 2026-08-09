@@ -1,0 +1,131 @@
+server:
+  port: ${SERVER_PORT:8080}
+
+spring:
+  application:
+    name: der-kitchen
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:dev}
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:der_kitchen}
+    username: ${DB_USERNAME:postgres}
+    password: ${DB_PASSWORD:postgres}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+      connection-timeout: 30000
+      connection-init-sql: SET TIME ZONE 'Asia/Shanghai'
+  servlet:
+    multipart:
+      max-file-size: 5MB
+      max-request-size: 25MB
+  jackson:
+    date-format: yyyy-MM-dd HH:mm:ss
+    time-zone: Asia/Shanghai
+    default-property-inclusion: non_null
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    validate-on-migrate: true
+    baseline-on-migrate: false
+    clean-disabled: true
+    placeholders:
+      admin_openid: ${ADMIN_OPENID:test_admin_openid}
+      admin_username: ${ADMIN_USERNAME:admin}
+      admin_password_hash: "${ADMIN_PASSWORD_HASH:$2a$10$ZpD9blOkpu2MNBGQ3VDBSeY5ypTbWa4TjFCIDqaoZ7QPEQ4h2XCEq}"
+      user_openid: ${WIFE_OPENID:test_wife_openid}
+  sql:
+    init:
+      mode: never
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.nologging.NoLoggingImpl
+  global-config:
+    db-config:
+      id-type: auto
+      logic-delete-field: deleted
+      logic-delete-value: true
+      logic-not-delete-value: false
+
+minio:
+  endpoint: ${MINIO_ENDPOINT:http://localhost:9000}
+  access-key: ${MINIO_ACCESS_KEY:minioadmin}
+  secret-key: ${MINIO_SECRET_KEY:minioadmin}
+  bucket: ${MINIO_BUCKET:kitchen}
+  presigned-expiry-seconds: ${MINIO_PRESIGNED_EXPIRY_SECONDS:3600}
+
+app:
+  wx:
+    app-id: ${WX_APP_ID:test_wx_app_id}
+    app-secret: ${WX_APP_SECRET:}
+    subscribe:
+      enabled: ${WX_SUBSCRIBE_ENABLED:false}
+      template-id: ${WX_SUBSCRIBE_TEMPLATE_ID:}
+      page: ${WX_SUBSCRIBE_PAGE:pages/order/detail?id={orderId}}
+      meal-key: ${WX_SUBSCRIBE_MEAL_KEY:thing1}
+      summary-key: ${WX_SUBSCRIBE_SUMMARY_KEY:thing2}
+      time-key: ${WX_SUBSCRIBE_TIME_KEY:time3}
+      max-attempts: ${WX_SUBSCRIBE_MAX_ATTEMPTS:5}
+      retry-base-seconds: ${WX_SUBSCRIBE_RETRY_BASE_SECONDS:30}
+      processing-timeout-seconds: ${WX_SUBSCRIBE_PROCESSING_TIMEOUT_SECONDS:300}
+      worker-delay-millis: ${WX_SUBSCRIBE_WORKER_DELAY_MILLIS:3000}
+  auth:
+    allowed-openids:
+      - ${WIFE_OPENID:test_wife_openid}
+      - ${ADMIN_OPENID:test_admin_openid}
+    admin-openids:
+      - ${ADMIN_OPENID:test_admin_openid}
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:12000,http://127.0.0.1:12000,http://localhost:12001,http://127.0.0.1:12001}
+
+sa-token:
+  token-name: Authorization
+  token-prefix: Bearer
+  timeout: 604800
+  active-timeout: -1
+  is-concurrent: true
+  is-share: false
+  token-style: uuid
+  is-log: false
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+  api-docs:
+    path: /v3/api-docs
+  group-configs:
+    - group: user-api
+      display-name: 用户端接口
+      paths-to-match: /api/v1/**
+      paths-to-exclude: /api/v1/admin/**
+    - group: admin-api
+      display-name: 管理端接口
+      paths-to-match: /api/v1/admin/**
+    - group: common-api
+      display-name: 公共接口
+      paths-to-match: /api/common/**
+
+knife4j:
+  enable: true
+  setting:
+    language: zh_cn
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
+
+logging:
+  level:
+    root: info
+    com.der.kitchen: info
+    org.springframework.web: info
+  pattern:
+    dateformat: yyyy-MM-dd HH:mm:ss.SSS

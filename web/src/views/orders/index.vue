@@ -2,7 +2,7 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { getOrders, transitOrderStatus } from '@/api/order'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import type { Order } from '@/types'
 
 const router = useRouter()
@@ -21,6 +21,7 @@ const loading = ref(false)
 const statusOptions = [
   { label: '待处理', value: 'pending' },
   { label: '制作中', value: 'preparing' },
+  { label: '烹饪中', value: 'cooking' },
   { label: '已完成', value: 'completed' },
   { label: '已取消', value: 'cancelled' },
 ]
@@ -31,7 +32,7 @@ const mealOptions = [
 ]
 
 function getStatusTagType(s: string) {
-  const map: Record<string, any> = { pending: 'warning', preparing: '', completed: 'success', cancelled: 'info' }
+  const map: Record<string, any> = { pending: 'warning', preparing: '', cooking: 'danger', completed: 'success', cancelled: 'info' }
   return map[s] || ''
 }
 function getStatusLabel(s: string) {
@@ -58,6 +59,9 @@ async function fetchOrders() {
 }
 
 async function handleTransit(id: number, status: string) {
+  if (status === 'cancelled') {
+    await ElMessageBox.confirm('确定取消该订单吗？取消后不能恢复。', '取消订单', { type: 'warning' })
+  }
   await transitOrderStatus(id, status)
   ElMessage.success('操作成功')
   fetchOrders()
@@ -65,8 +69,18 @@ async function handleTransit(id: number, status: string) {
 
 function getNextActions(status: string) {
   const map: Record<string, { label: string; status: string; type?: string }[]> = {
-    pending: [{ label: '接单', status: 'preparing', type: 'primary' }],
-    preparing: [{ label: '完成', status: 'completed', type: 'success' }],
+    pending: [
+      { label: '接单', status: 'preparing', type: 'primary' },
+      { label: '取消', status: 'cancelled', type: 'danger' },
+    ],
+    preparing: [
+      { label: '开始烹饪', status: 'cooking', type: 'primary' },
+      { label: '取消', status: 'cancelled', type: 'danger' },
+    ],
+    cooking: [
+      { label: '完成', status: 'completed', type: 'success' },
+      { label: '取消', status: 'cancelled', type: 'danger' },
+    ],
   }
   return map[status] || []
 }
@@ -99,6 +113,7 @@ onMounted(fetchOrders)
       <el-table-column label="餐次" width="80">
         <template #default="{ row }">{{ getMealLabel(row.mealType) }}</template>
       </el-table-column>
+      <el-table-column prop="userNickname" label="下单人" width="100" />
       <el-table-column prop="mealDate" label="用餐日期" width="110" />
       <el-table-column label="备注" min-width="180">
         <template #default="{ row }">

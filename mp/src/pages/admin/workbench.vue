@@ -2,7 +2,7 @@
   <view class="workbench-page">
     <!-- 新订单横幅提醒 -->
     <view v-if="showBanner" class="new-order-banner" @tap="scrollToTop">
-      <text>🔔 新订单来啦！</text>
+      <text>🔔 {{ bannerText }}</text>
       <text class="banner-close" @tap.stop="showBanner = false">✕</text>
     </view>
 
@@ -16,6 +16,11 @@
         <text class="num">{{ ongoingCount }}</text>
         <text class="label">进行中</text>
       </view>
+    </view>
+
+    <view v-if="subscriptionConfig?.enabled" class="subscribe-row">
+      <text>微信离线提醒需要主动授权，每次授权可接收一条新订单通知。</text>
+      <button class="subscribe-btn" size="mini" @tap="requestWechatSubscription">开启一次提醒</button>
     </view>
 
     <!-- Tab -->
@@ -39,8 +44,8 @@
       <view v-for="order in displayList" :key="order.id" class="admin-order-card">
         <!-- 头部 -->
         <view class="aoc-header">
-          <text class="aoc-no">#{{ order.orderNo || order.id }}</text>
-          <text class="aoc-meal">{{ mealMap[order.mealType] || order.mealType }}</text>
+          <text class="aoc-no">#{{ order.id }}</text>
+          <text class="aoc-meal">{{ formatMealLabel(order.mealDate, order.mealType) }}</text>
           <view class="aoc-status" :class="order.status">
             <text>{{ statusMap[order.status]?.label }}</text>
           </view>
@@ -54,21 +59,21 @@
         </view>
 
         <!-- 备注 -->
-        <view v-if="order.flavorTags || order.avoidNote || order.specialNote" class="aoc-notes">
-          <text v-if="order.flavorTags" class="note-line">🏷️ {{ order.flavorTags }}</text>
-          <text v-if="order.avoidNote" class="note-line">🚫 {{ order.avoidNote }}</text>
-          <text v-if="order.specialNote" class="note-line">✨ {{ order.specialNote }}</text>
+        <view v-if="order.tasteTags.length || order.dietaryNotes || order.specialRequests" class="aoc-notes">
+          <text v-if="order.tasteTags.length" class="note-line">🏷️ {{ order.tasteTags.join('、') }}</text>
+          <text v-if="order.dietaryNotes" class="note-line">🚫 {{ order.dietaryNotes }}</text>
+          <text v-if="order.specialRequests" class="note-line">✨ {{ order.specialRequests }}</text>
         </view>
 
         <!-- 操作按钮 -->
         <view class="aoc-actions">
-          <view v-if="order.status === 'pending'" class="action-btn primary" @tap="handleTransit(order, 'accept')">
+          <view v-if="order.status === 'pending'" class="action-btn primary" @tap="handleTransit(order, 'preparing')">
             <text>接单开做 👨‍🍳</text>
           </view>
-          <view v-if="order.status === 'preparing'" class="action-btn cooking" @tap="handleTransit(order, 'start_cooking')">
+          <view v-if="order.status === 'preparing'" class="action-btn cooking" @tap="handleTransit(order, 'cooking')">
             <text>开始烹饪 🔥</text>
           </view>
-          <view v-if="order.status === 'cooking'" class="action-btn success" @tap="handleTransit(order, 'complete')">
+          <view v-if="order.status === 'cooking'" class="action-btn success" @tap="handleTransit(order, 'completed')">
             <text>完成上菜 ✅</text>
           </view>
           <view v-if="canCancel(order.status)" class="action-btn cancel" @tap="handleCancel(order)">
@@ -90,7 +95,14 @@
 import { ref, computed, onUnmounted } from 'vue'
 import { onShow, onHide } from '@dcloudio/uni-app'
 import { getAdminOrders, transitOrderStatus, getPendingCount } from '@/api/order'
+import {
+  getAdminNotifications,
+  getSubscriptionConfig,
+  markNotificationRead,
+  type SubscriptionConfig,
+} from '@/api/notification'
 import type { Order } from '@/types'
+import { formatMealLabel, today } from '@/utils/order'
 
 const activeTab = ref<'pending' | 'all'>('pending')
 const pendingCount = ref(0)
@@ -98,8 +110,10 @@ const ongoingCount = ref(0)
 const orderList = ref<Order[]>([])
 const refreshing = ref(false)
 const showBanner = ref(false)
+const bannerText = ref('新订单来啦！')
+const subscriptionConfig = ref<SubscriptionConfig | null>(null)
 let pollTimer: any = null
-let lastPendingCount = 0
+let lastNotificationId: number | null = null
 
 const statusMap: Record<string, { label: string }> = {
   pending: { label: '待接单' },
@@ -109,16 +123,12 @@ const statusMap: Record<string, { label: string }> = {
   cancelled: { label: '已取消' },
 }
 
-const mealMap: Record<string, string> = {
-  today_lunch: '今日午餐', today_dinner: '今日晚餐',
-  tomorrow_lunch: '明日午餐', tomorrow_dinner: '明日晚餐',
-}
-
 const displayList = computed(() => {
   if (activeTab.value === 'pending') {
     return orderList.value.filter(o => ['pending', 'preparing', 'cooking'].includes(o.status))
   }
-  return orderList.value
+  const currentDate = today()
+  return orderList.value.filter(o => o.mealDate === currentDate)
 })
 
 function canCancel(status: string) {
@@ -137,16 +147,55 @@ async function loadOrders() {
 async function pollPendingCount() {
   try {
     const count = await getPendingCount()
-    if (count > lastPendingCount && lastPendingCount >= 0) {
-      // 新订单来了
-      showBanner.value = true
-      uni.vibrateShort({})
-      setTimeout(() => { showBanner.value = false }, 3000)
-      loadOrders() // 刷新列表
-    }
-    lastPendingCount = count
     pendingCount.value = count
   } catch { /* 忽略 */ }
+}
+
+async function pollNotifications() {
+  try {
+    const notifications = await getAdminNotifications({
+      // 首次不传 afterId；空列表后游标为 0，后续按 id > afterId 增量拉取
+      afterId: lastNotificationId ?? undefined,
+      limit: 20,
+    })
+    if (lastNotificationId === null) {
+      lastNotificationId = notifications.reduce((max, item) => Math.max(max, item.id), 0)
+      return
+    }
+    if (notifications.length === 0) return
+    lastNotificationId = Math.max(lastNotificationId, ...notifications.map(item => item.id))
+    const latest = notifications[notifications.length - 1]
+    bannerText.value = `${latest.title} · ${latest.content}`
+    showBanner.value = true
+    uni.vibrateShort({})
+    setTimeout(() => { showBanner.value = false }, 3000)
+    await Promise.all(notifications.map(item => markNotificationRead(item.id)))
+    loadOrders()
+  } catch { /* 忽略 */ }
+}
+
+async function loadSubscriptionConfig() {
+  try {
+    subscriptionConfig.value = await getSubscriptionConfig()
+  } catch { /* 站内通知仍可正常工作 */ }
+}
+
+function requestWechatSubscription() {
+  const templateId = subscriptionConfig.value?.templateId
+  if (!templateId) return
+  // #ifdef MP-WEIXIN
+  uni.requestSubscribeMessage({
+    tmplIds: [templateId],
+    success: (result) => {
+      const accepted = (result as unknown as Record<string, unknown>)[templateId] === 'accept'
+      uni.showToast({ title: accepted ? '已开启一次提醒' : '未授权提醒', icon: 'none' })
+    },
+    fail: () => uni.showToast({ title: '订阅失败，请稍后重试', icon: 'none' }),
+  })
+  // #endif
+  // #ifndef MP-WEIXIN
+  uni.showToast({ title: '请在微信小程序中开启', icon: 'none' })
+  // #endif
 }
 
 async function handleTransit(order: Order, action: string) {
@@ -162,12 +211,12 @@ async function handleTransit(order: Order, action: string) {
 async function handleCancel(order: Order) {
   uni.showModal({
     title: '取消订单',
-    content: `确定取消订单 #${order.orderNo || order.id} 吗？`,
+    content: `确定取消订单 #${order.id} 吗？`,
     confirmColor: '#FF4D4F',
     success: async (res) => {
       if (res.confirm) {
         try {
-          await transitOrderStatus(order.id, 'cancel')
+          await transitOrderStatus(order.id, 'cancelled')
           uni.showToast({ title: '已取消', icon: 'success' })
           loadOrders()
         } catch (e: any) {
@@ -189,8 +238,10 @@ function scrollToTop() {
 
 function startPoll() {
   stopPoll()
-  lastPendingCount = pendingCount.value
-  pollTimer = setInterval(pollPendingCount, 5000)
+  pollTimer = setInterval(() => {
+    pollPendingCount()
+    pollNotifications()
+  }, 3000)
 }
 
 function stopPoll() {
@@ -199,7 +250,9 @@ function stopPoll() {
 
 onShow(() => {
   loadOrders()
-  startPoll()
+  loadSubscriptionConfig()
+  pollPendingCount()
+  pollNotifications().finally(startPoll)
 })
 
 onHide(() => { stopPoll() })
@@ -237,6 +290,23 @@ onUnmounted(() => { stopPoll() })
   display: flex;
   gap: var(--spacing-md);
   padding: var(--spacing-lg);
+}
+.subscribe-row {
+  margin: 0 var(--spacing-lg) var(--spacing-md);
+  padding: var(--spacing-sm) var(--spacing-md);
+  border-radius: var(--radius-md);
+  background: #fff7e6;
+  color: #8c6d1f;
+  font-size: var(--font-xs);
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  text { flex: 1; }
+  .subscribe-btn {
+    margin: 0;
+    color: #fff;
+    background: var(--color-primary);
+  }
 }
 .stat-card {
   flex: 1;

@@ -7,7 +7,7 @@ RUN apk add --no-cache tzdata && \
     cp /usr/share/zoneinfo/Asia/Shanghai /etc/localtime && \
     echo "Asia/Shanghai" > /etc/timezone
 
-COPY target/der-kitchen-server.jar app.jar
+COPY der-kitchen-app/target/der-kitchen-app.jar app.jar
 
 EXPOSE 8080
 

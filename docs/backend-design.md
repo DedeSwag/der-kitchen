@@ -1,7 +1,7 @@
 # 陈哥厨房 后端设计文档
 
 > 编写日期：2026-05-22  
-> 版本：V1.0  
+> 版本：V1.3（2026-08-08 订单核心闭环更新）
 > 技术栈：Java 17 + Spring Boot 3 + PostgreSQL + MinIO  
 > 设计原则：简单实用，快速交付，预留扩展
 
@@ -16,8 +16,8 @@
 | ORM | MyBatis-Plus | 3.5+ | 轻量灵活，适合简单业务 |
 | 数据库 | PostgreSQL | 15+ | 稳定可靠，JSON 支持好 |
 | 文件存储 | MinIO | 最新 | 自建对象存储，兼容 S3 协议 |
-| 缓存 | 本地 Caffeine | 3.x | 用户量小，无需 Redis |
-| 认证 | 微信小程序登录 + JWT | — | 轻量鉴权 |
+| 缓存 | 暂不引入 | — | 当前无明确缓存场景；Sa-Token 单机先使用默认内存会话 |
+| 认证 | Sa-Token 标准会话 | 1.45.0 | 微信/账号登录、路由与角色鉴权 |
 | API 文档 | Knife4j (Swagger) | 4.x | 接口调试 |
 | 构建 | Maven | 3.9+ | — |
 | 部署 | Docker + docker-compose | — | 一键部署 |
@@ -25,6 +25,8 @@
 ---
 
 ## 二、工程结构
+
+> 本节保留最初的单模块设计背景；当前工程结构以《后端模块化重构设计文档》为准。
 
 ```
 server/
@@ -118,7 +120,9 @@ server/
 
 ---
 
-## 三、数据库设计
+## 三、数据库设计（历史草案）
+
+> 本节以下 DDL 保留用于追溯最初需求，不得执行。其中 `users/categories/dishes/orders/order_items/favorites` 等旧表名和 BIGSERIAL 方案已经废弃。当前唯一数据库设计与执行入口见 [database-baseline.md](./database-baseline.md) 和应用中的 `V1__init.sql`。
 
 ### 3.1 ER 关系
 
@@ -143,20 +147,9 @@ orders 1───N order_items
 | update_by | VARCHAR(32) | NULL | 最后更新人名称 |
 | deleted | BOOLEAN | FALSE | 软删除标记，TRUE 表示已删除 |
 
-> `update_time` 通过 PostgreSQL 触发器自动维护，业务代码无需手动赋值。  
-> `create_by` / `update_by` 由业务层从 UserContext 中取当前用户昵称写入。  
+> `update_time` 由 MyBatis-Plus `AutoFillHandler` 自动维护，不创建 PostgreSQL 触发器。
+> 登录成功时把用户名写入 Sa-Token Session，`create_by` / `update_by` 由 `AutoFillHandler` 读取 `username` 写入。
 > MyBatis-Plus 全局配置 `logic-delete-field: deleted`，查询自动过滤已删除记录。
-
-```sql
--- 自动更新 update_time 的触发器函数（全局复用）
-CREATE OR REPLACE FUNCTION set_update_time()
-RETURNS TRIGGER AS $$
-BEGIN
-    NEW.update_time = NOW();
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-```
 
 ### 3.3 DDL
 
@@ -182,10 +175,6 @@ CREATE TABLE users (
 CREATE INDEX idx_users_openid   ON users(openid);
 CREATE INDEX idx_users_deleted  ON users(deleted);
 
-CREATE TRIGGER trg_users_update_time
-    BEFORE UPDATE ON users
-    FOR EACH ROW EXECUTE FUNCTION set_update_time();
-
 -- =============================================
 -- 菜品分类表
 -- =============================================
@@ -203,10 +192,6 @@ CREATE TABLE categories (
 );
 
 CREATE INDEX idx_categories_deleted ON categories(deleted);
-
-CREATE TRIGGER trg_categories_update_time
-    BEFORE UPDATE ON categories
-    FOR EACH ROW EXECUTE FUNCTION set_update_time();
 
 -- =============================================
 -- 菜品表
@@ -231,10 +216,6 @@ CREATE TABLE dishes (
 CREATE INDEX idx_dishes_category ON dishes(category_id);
 CREATE INDEX idx_dishes_listed   ON dishes(is_listed, deleted);
 CREATE INDEX idx_dishes_deleted  ON dishes(deleted);
-
-CREATE TRIGGER trg_dishes_update_time
-    BEFORE UPDATE ON dishes
-    FOR EACH ROW EXECUTE FUNCTION set_update_time();
 
 -- =============================================
 -- 订单表
@@ -262,10 +243,6 @@ CREATE INDEX idx_orders_status    ON orders(status);
 CREATE INDEX idx_orders_meal_date ON orders(meal_date);
 CREATE INDEX idx_orders_deleted   ON orders(deleted);
 
-CREATE TRIGGER trg_orders_update_time
-    BEFORE UPDATE ON orders
-    FOR EACH ROW EXECUTE FUNCTION set_update_time();
-
 -- =============================================
 -- 订单菜品明细表
 -- =============================================
@@ -287,10 +264,6 @@ CREATE TABLE order_items (
 CREATE INDEX idx_order_items_order   ON order_items(order_id);
 CREATE INDEX idx_order_items_deleted ON order_items(deleted);
 
-CREATE TRIGGER trg_order_items_update_time
-    BEFORE UPDATE ON order_items
-    FOR EACH ROW EXECUTE FUNCTION set_update_time();
-
 -- =============================================
 -- 收藏表
 -- =============================================
@@ -311,9 +284,6 @@ CREATE TABLE favorites (
 CREATE INDEX idx_favorites_user    ON favorites(user_id);
 CREATE INDEX idx_favorites_deleted ON favorites(deleted);
 
-CREATE TRIGGER trg_favorites_update_time
-    BEFORE UPDATE ON favorites
-    FOR EACH ROW EXECUTE FUNCTION set_update_time();
 ```
 
 ---
@@ -334,7 +304,7 @@ CREATE TRIGGER trg_favorites_update_time
 }
 ```
 
-- 分页参数：`page`（从1开始）、`size`（默认20）
+- 分页参数：`pageNum`（从1开始）、`pageSize`（默认20，最大100）；响应为 `records/total/pageNum/pageSize`
 - 错误码：
 
 | code | 说明 |
@@ -344,7 +314,14 @@ CREATE TRIGGER trg_favorites_update_time
 | 401 | 未认证 |
 | 403 | 无权限 |
 | 404 | 资源不存在 |
+| 405 | 请求方法不支持 |
+| 409 | 状态、并发或数据约束冲突 |
+| 413 | 上传文件过大 |
+| 415 | 请求内容类型不支持 |
+| 502 / 503 | 外部服务异常 |
 | 500 | 服务异常 |
+
+HTTP 状态码必须与响应体 `code` 一致。完整契约见 [notification-stats-api-contract.md](./notification-stats-api-contract.md)。
 
 ---
 
@@ -368,7 +345,7 @@ CREATE TRIGGER trg_favorites_update_time
 {
   "code": 200,
   "data": {
-    "token": "eyJhbGci...",
+    "token": "5f2a0f4d-...",
     "role": "user",
     "userId": 1,
     "nickname": "老婆"
@@ -380,7 +357,7 @@ CREATE TRIGGER trg_favorites_update_time
 1. 用 code 调用微信接口换取 openid
 2. 查询 users 表，存在则更新信息，不存在则检查白名单
 3. 一期仅白名单 openid 可登录，非白名单返回 403
-4. 签发 JWT（有效期7天）
+4. 建立 Sa-Token 会话并返回 token（默认有效期7天）
 
 ---
 
@@ -418,7 +395,8 @@ CREATE TRIGGER trg_favorites_update_time
     {
       "id": 1,
       "name": "红烧肉",
-      "imageUrl": "http://minio/dishes/1.jpg",
+      "imageFileId": 12,
+      "imageUrl": "https://minio.example/presigned-url",
       "categoryId": 1,
       "cookingTime": 30,
       "status": "normal",
@@ -428,7 +406,7 @@ CREATE TRIGGER trg_favorites_update_time
 }
 ```
 
-**逻辑：** 仅返回 `is_listed=true AND is_deleted=false` 的菜品。
+**逻辑：** 仅返回未删除、`is_listed=true` 且所属分类为 `active` 的菜品。`imageUrl` 是按 `imageFileId` 动态生成的短期地址，不持久化。
 
 ---
 
@@ -440,7 +418,7 @@ CREATE TRIGGER trg_favorites_update_time
 
 #### GET `/api/v1/favorites`
 
-获取当前用户收藏列表。
+获取当前用户收藏列表，返回与菜品列表一致的 `DishVO`。下架、删除或隐藏分类中的菜品暂不展示。
 
 ---
 
@@ -501,8 +479,10 @@ CREATE TRIGGER trg_favorites_update_time
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|------|------|
 | status | String | 否 | 状态筛选，多个逗号分隔 |
-| page | Int | 否 | 默认1 |
-| size | Int | 否 | 默认20 |
+| pageNum | Int | 否 | 默认1 |
+| pageSize | Int | 否 | 默认20，最大100 |
+
+`status` 还支持快捷口径 `ongoing`（待接单/备菜/烹饪）和 `history`（已完成/已取消）。列表响应包含菜品名称、数量和是否加菜等快照明细。
 
 ---
 
@@ -533,6 +513,8 @@ CREATE TRIGGER trg_favorites_update_time
 
 **逻辑：** 新增 order_items，标记 `is_extra=true`。
 
+取消、加菜和管理端状态流转都会锁定同一订单主记录；并发冲突或非法状态迁移返回 409。详细事务与状态机约定见 [order-core.md](./order-core.md)。
+
 ---
 
 ### 4.4 管理端接口
@@ -556,6 +538,7 @@ CREATE TRIGGER trg_favorites_update_time
 | 方法 | 路径 | 说明 |
 |------|------|------|
 | GET | /admin/dishes | 菜品列表（支持分类/状态/上架筛选） |
+| GET | /admin/dishes/{id} | 管理端菜品详情（可读取下架菜品） |
 | POST | /admin/dishes | 新增菜品 |
 | PUT | /admin/dishes/{id} | 编辑菜品 |
 | DELETE | /admin/dishes/{id} | 软删除菜品 |
@@ -566,10 +549,8 @@ CREATE TRIGGER trg_favorites_update_time
 **批量上下架请求：**
 ```json
 {
-  "items": [
-    { "dishId": 1, "isListed": true },
-    { "dishId": 2, "isListed": false }
-  ]
+  "ids": [1, 2],
+  "isListed": false
 }
 ```
 
@@ -588,6 +569,8 @@ CREATE TRIGGER trg_favorites_update_time
 ```json
 { "status": "preparing" }
 ```
+
+管理端菜品和订单分页响应统一为 `records/total/pageNum/pageSize`。
 
 **状态流转校验：**
 | 当前状态 | 可转为 |
@@ -614,8 +597,8 @@ CREATE TRIGGER trg_favorites_update_time
 ```json
 {
   "data": [
-    { "dishId": 1, "dishName": "红烧肉", "count": 16 },
-    { "dishId": 3, "dishName": "番茄蛋汤", "count": 12 }
+    { "dishId": 1, "dishName": "红烧肉", "totalCount": 16 },
+    { "dishId": 3, "dishName": "番茄蛋汤", "totalCount": 12 }
   ]
 }
 ```
@@ -624,32 +607,36 @@ CREATE TRIGGER trg_favorites_update_time
 ```json
 {
   "data": {
-    "pendingCount": 2,
-    "processingCount": 1,
-    "todayCompletedCount": 3,
-    "todayTotalCount": 6
+    "todayOrders": 6,
+    "pendingOrders": 2,
+    "totalDishes": 18,
+    "weekOrders": 21
   }
 }
 ```
 
 ---
 
-#### 文件上传 `/api/v1/admin/files`
+#### 文件管理 `/api/common/file`
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| POST | /admin/files/upload | 上传图片，返回访问URL |
+| POST | /api/common/file/upload | 上传图片，返回稳定 fileId 和短期预览 URL |
+| GET | /api/common/file/{fileId} | 刷新预签名访问地址 |
+| DELETE | /api/common/file/{fileId} | 删除本人上传且未被菜品引用的文件 |
 
-**请求：** `multipart/form-data`，字段名 `file`
+**请求：** `multipart/form-data`，字段名 `files`，最多 5 个
 
-**校验：** 仅允许 jpg/png/webp，大小 ≤ 5MB
+**校验：** 仅允许真实的 jpg/jpeg/png/webp，单文件 ≤ 5MB；按文件签名和可解析尺寸判断，不信任扩展名或客户端 MIME。
 
 **响应：**
 ```json
 {
-  "data": {
-    "url": "http://minio-host:9000/dishes/2026/05/22/abc123.jpg"
-  }
+  "data": [{
+    "fileId": 12,
+    "url": "https://minio.example/presigned-url",
+    "thumbnailUrl": "https://minio.example/presigned-thumbnail-url"
+  }]
 }
 ```
 
@@ -660,20 +647,13 @@ CREATE TRIGGER trg_favorites_update_time
 ### 5.1 认证与鉴权
 
 ```
-请求 → JwtAuthFilter → 解析Token → 注入UserContext → Controller
-                     ↘ 无Token/过期 → 401
-                     
-AdminController → @RequireRole("admin") → 校验角色 → 403
+请求 → SaInterceptor → StpUtil.checkLogin() → Controller
+                    ↘ 无 token / 过期 → 401
+
+/api/v1/admin/** → StpUtil.checkRole("admin") → 无角色返回 403
 ```
 
-**JWT Payload：**
-```json
-{
-  "userId": 1,
-  "role": "admin",
-  "exp": 1716422400
-}
-```
+角色由 `StpInterfaceImpl` 按登录用户 ID 实时查询 `sys_user`，不把可变角色固化在 token 中。
 
 **白名单机制（一期）：**
 - 配置文件中维护允许登录的 openid 列表
@@ -688,8 +668,6 @@ app:
     allowed-openids:
       - oXXXX_wife_openid
       - oXXXX_chenge_openid
-    jwt-secret: your-secret-key
-    jwt-expire-days: 7
 ```
 
 ---
@@ -721,29 +699,32 @@ public enum OrderStatus {
 
 ---
 
-### 5.3 新订单通知
+### 5.3 订单事件与通知
 
 由于用户量极小（仅1人），通知机制采用简单方案：
 
 **小程序端（管理页）：**
-- 前端每 5 秒轮询 `/admin/orders/pending-count`
-- 数量变化时播放提示音 + 震动
+- 前端每 3 秒增量轮询 `/api/v1/admin/notifications?afterId=...`
+- 创建订单、加菜和取消事件到达时显示横幅、震动并刷新订单
+- `/api/v1/admin/orders/pending-count` 只维护严格 `pending` 的待接单角标
 
 **Web 端：**
-- 同样轮询（间隔 5 秒），数量变化时触发浏览器 Notification
+- 同样增量轮询站内通知，触发浏览器 Notification 和提示音
 
-**微信订阅消息（补充）：**
-- 下单时调用微信订阅消息接口推送给管理员
-- 需管理员预先订阅消息模板
+**微信订阅消息：**
+- 订单事务只写事件和待投递记录，不直接调用微信
+- 后台任务以原子领取、超时恢复和指数退避异步投递，达到最大次数后进入 `dead`
+- 管理员在小程序工作台主动申请一次性订阅授权
 
-> 💡 用户量只有1人，轮询完全够用，无需引入 WebSocket 增加复杂度。
+完整事件映射、状态机与配置见 [notification-stats-api-contract.md](./notification-stats-api-contract.md)。
 
 ---
 
 ### 5.4 文件上传流程
 
 ```
-客户端 → 上传图片 → 后端接收 → 压缩(≤500KB) → 写入MinIO → 返回URL
+客户端 → 上传图片 → 签名/尺寸校验 → 压缩/缩略图 → 写入MinIO
+      → sys_file保存对象键 → 返回fileId和短期URL → dish_info只保存image_file_id
 ```
 
 **MinIO Bucket 规划：**
@@ -799,8 +780,14 @@ app:
     allowed-openids:
       - ${WIFE_OPENID}
       - ${ADMIN_OPENID}
-    jwt-secret: ${JWT_SECRET}
-    jwt-expire-days: 7
+    admin-openids:
+      - ${ADMIN_OPENID}
+
+sa-token:
+  token-name: Authorization
+  token-prefix: Bearer
+  timeout: 604800
+  token-style: uuid
 ```
 
 ---
@@ -822,7 +809,6 @@ services:
       - MINIO_SECRET_KEY=minioadmin
       - WX_APP_ID=xxx
       - WX_APP_SECRET=xxx
-      - JWT_SECRET=xxx
       - WIFE_OPENID=xxx
       - ADMIN_OPENID=xxx
     depends_on:
@@ -923,26 +909,15 @@ public class GlobalExceptionHandler {
 }
 ```
 
-### 8.3 权限注解
+### 8.3 路由角色鉴权
 
 ```java
-@Target(ElementType.METHOD)
-@Retention(RetentionPolicy.RUNTIME)
-public @interface RequireRole {
-    String value();
-}
-
-@Aspect
-@Component
-public class RoleCheckAspect {
-    @Before("@annotation(requireRole)")
-    public void check(RequireRole requireRole) {
-        UserContext current = UserContextHolder.get();
-        if (!requireRole.value().equals(current.getRole())) {
-            throw new BizException(403, "无权限访问");
-        }
-    }
-}
+registry.addInterceptor(new SaInterceptor(handler -> {
+    SaRouter.match("/api/**")
+            .notMatch("/api/v1/auth/wx-login", "/api/v1/auth/admin-login")
+            .check(r -> StpUtil.checkLogin());
+    SaRouter.match("/api/v1/admin/**", r -> StpUtil.checkRole("admin"));
+})).addPathPatterns("/**");
 ```
 
 ---
@@ -951,8 +926,8 @@ public class RoleCheckAspect {
 
 | 安全点 | 方案 |
 |--------|------|
-| 认证 | 微信 code 登录 + JWT |
-| 鉴权 | 角色注解 + AOP 拦截 |
+| 认证 | 微信 code / 管理端账号密码登录 + Sa-Token 标准会话 |
+| 鉴权 | Sa-Token 路由拦截 + 数据库角色查询 |
 | 数据隔离 | 用户端接口自动带入当前 userId |
 | SQL 注入 | MyBatis-Plus 参数化查询 |
 | 文件上传 | 后缀白名单 + 文件大小限制 + Content-Type 校验 |
@@ -979,7 +954,7 @@ public class RoleCheckAspect {
 | 后端任务 | 预估工时 | 说明 |
 |---------|---------|------|
 | 工程搭建 + 基础配置 | 0.5天 | 脚手架、Docker、数据库初始化 |
-| 认证模块 | 0.5天 | 微信登录、JWT、白名单 |
+| 认证模块 | 已完成基线 | Sa-Token、微信/管理端登录、白名单、管理员名单 |
 | 菜品模块（CRUD + 上下架） | 1天 | |
 | 分类模块 | 0.5天 | |
 | 订单模块（创建/查询/状态机） | 1.5天 | 核心逻辑 |

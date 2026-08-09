@@ -6,7 +6,7 @@ export function getOverview() {
 }
 
 export function getTopDishes(params: { startDate: string; endDate: string; limit?: number }) {
-  return request.get<any, { dishName: string; totalCount: number }[]>('/api/v1/admin/stats/top-dishes', { params })
+  return request.get<any, { dishId: number; dishName: string; totalCount: number }[]>('/api/v1/admin/stats/top-dishes', { params })
 }
 
 export function getDailySummary(params: { startDate: string; endDate: string }) {

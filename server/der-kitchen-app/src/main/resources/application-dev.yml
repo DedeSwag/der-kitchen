@@ -1,0 +1,29 @@
+# 开发环境只提供本机默认值，真实凭据仍可通过环境变量覆盖。
+spring:
+  datasource:
+    url: jdbc:postgresql://101.34.58.32:5432/kitchen
+    username: admin
+    password: f9PJdfAn)xf&
+
+mybatis-plus:
+  configuration:
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: always
+
+minio:
+  endpoint: http://101.34.58.32:12090
+  access-key: admin
+  secret-key: Her0neverdie!
+  bucket: kitchen
+
+logging:
+  level:
+    com.der.kitchen: debug

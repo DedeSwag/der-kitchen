@@ -131,8 +131,7 @@ async function loadCategories() {
 async function loadDishes() {
   loading.value = true
   try {
-    const res = await getDishes({ pageNum: 1, pageSize: 100 })
-    allDishes.value = res.records
+    allDishes.value = await getDishes()
   } catch { /* 忽略 */ }
   loading.value = false
 }
